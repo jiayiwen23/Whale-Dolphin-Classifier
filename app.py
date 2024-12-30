@@ -1,154 +1,66 @@
+import os
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+# Load environment variables
+load_dotenv()
+
+# Get Gemini API key from environment variable
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+genai.configure(api_key=GEMINI_API_KEY)
+model_genai = genai.GenerativeModel("gemini-1.5-flash")
+
 import numpy as np
 import tensorflow as tf
 from keras.models import load_model
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from tensorflow.keras.applications.efficientnet import preprocess_input
 import gradio as gr
-import anthropic
-import json
-from typing import Tuple, Dict, Optional
 
-# Initialize Anthropic client
-client = anthropic.Anthropic()
-
-# Load the model
+# Load the whale & dolphin classifier model
 model = load_model('./whale_classifier.h5', compile=False)
 
 # Define the labels
 labels = {
-    0: 'Beluga Whale', 1: 'Blue Whale', 2: 'Bottlenose Dolphin', 
-    3: 'Brydes Whale', 4: 'Common Dolphin', 5: 'Cuviers Beaked Whale',
-    6: 'Dusky Dolphin', 7: 'False Killer Whale', 8: 'Fin Whale',
-    9: 'Gray Whale', 10: 'Humpback Whale', 11: 'Killer Whale',
-    12: 'Long Finned Pilot Whale', 13: 'Melon Headed Whale',
-    14: 'Minke Whale', 15: 'Pantropic Spotted Dolphin',
-    16: 'Pilot Whale', 17: 'Sei Whale', 18: 'Short Finned Pilot Whale',
-    19: 'Southern Right Whale', 20: 'Spinner Dolphin',
-    21: 'Spotted Dolphin', 22: 'White Sided Dolphin'
+    0: 'Beluga Whale',
+    1: 'Blue Whale',
+    2: 'Bottlenose Dolphin',
+    3: 'Brydes Whale',
+    4: 'Common Dolphin',
+    5: 'Cuviers Beaked Whale',
+    6: 'Dusky Dolphin',
+    7: 'False Killer Whale',
+    8: 'Fin Whale',
+    9: 'Gray Whale',
+    10: 'Humpback Whale',
+    11: 'Killer Whale',
+    12: 'Long Finned Pilot Whale',
+    13: 'Melon Headed Whale',
+    14: 'Minke Whale',
+    15: 'Pantropic Spotted Dolphin',
+    16: 'Pilot Whale',
+    17: 'Sei Whale',
+    18: 'Short Finned Pilot Whale',
+    19: 'Southern Right Whale',
+    20: 'Spinner Dolphin',
+    21: 'Spotted Dolphin',
+    22: 'White Sided Dolphin'
 }
 
 # Dictionary containing paths to images for each species
 image_paths = {
-    'Beluga Whale': 'beluga_whale.jpg',
-    'Humpback Whale': 'humpback_whale.jpg',
-    'Killer Whale': 'killer_whale.jpg',
-    'Bottlenose Dolphin': 'bottlenose_dolphin.jpg',
-    'Dusky Dolphin': 'dusky_dolphin.jpg',
-    'Southern Right Whale': 'southern_right_whale.jpg',
-    'Blue Whale': 'blue_whale.jpg',
-    'Common Dolphin': 'common_dolphin.jpg',
+    'Beluga Whale': 'img/beluga_whale.jpg',
+    'Humpback Whale': 'img/humpback_whale.jpg',
+    'Killer Whale': 'img/killer_whale.jpg',
+    'Bottlenose Dolphin': 'img/bottlenose_dolphin.jpg',
+    'Dusky Dolphin': 'img/dusky_dolphin.jpg',
+    'Southern Right Whale': 'img/southern_right_whale.jpg',
+    'Blue Whale': 'img/blue_whale.jpg',
+    'Common Dolphin': 'img/common_dolphin.jpg',
 }
 
-def get_species_description(species_name: str) -> Dict:
-    """Get detailed species information using Claude function calling"""
-    
-    functions = [{
-        "name": "generate_species_info",
-        "description": "Generate detailed information about a marine mammal species",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "scientific_name": {"type": "string"},
-                "key_characteristics": {
-                    "type": "object",
-                    "properties": {
-                        "size": {"type": "string"},
-                        "weight": {"type": "string"},
-                        "lifespan": {"type": "string"},
-                        "distinctive_features": {"type": "string"}
-                    }
-                },
-                "behavior": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "List of behavioral characteristics"
-                },
-                "habitat": {"type": "string"},
-                "diet": {"type": "string"},
-                "conservation": {
-                    "type": "object",
-                    "properties": {
-                        "status": {"type": "string"},
-                        "threats": {"type": "array", "items": {"type": "string"}},
-                        "population_trend": {"type": "string"}
-                    }
-                },
-                "interesting_facts": {
-                    "type": "array",
-                    "items": {"type": "string"}
-                }
-            },
-            "required": ["scientific_name", "key_characteristics", "behavior", 
-                        "habitat", "diet", "conservation", "interesting_facts"]
-        }
-    }]
-
-    prompt = f"""Generate accurate, detailed information about the {species_name}.
-    Include scientific classification, physical characteristics, behavior patterns,
-    habitat preferences, diet, conservation status, and interesting facts.
-    Focus on unique identifying features and recent scientific findings.
-    Format the response according to the provided schema."""
-
-    try:
-        message = client.messages.create(
-            model="claude-3-sonnet-20240229",
-            max_tokens=1500,
-            messages=[{"role": "user", "content": prompt}],
-            functions=functions
-        )
-        return json.loads(message.content)
-    except Exception as e:
-        return {"error": f"Could not generate species description: {str(e)}"}
-
-def format_description(species_info: Dict) -> str:
-    """Format the species information into a readable HTML string"""
-    if "error" in species_info:
-        return f"<div class='error'>{species_info['error']}</div>"
-    
-    html = f"""
-    <div style='font-family: Arial, sans-serif; max-width: 800px; margin: 20px;'>
-        <h3 style='color: #2c3e50;'>Scientific Name: {species_info['scientific_name']}</h3>
-        
-        <h4 style='color: #34495e;'>Key Characteristics:</h4>
-        <ul style='list-style-type: none; padding-left: 20px;'>
-            <li>📏 Size: {species_info['key_characteristics']['size']}</li>
-            <li>⚖️ Weight: {species_info['key_characteristics']['weight']}</li>
-            <li>⏳ Lifespan: {species_info['key_characteristics']['lifespan']}</li>
-            <li>🔍 Distinctive Features: {species_info['key_characteristics']['distinctive_features']}</li>
-        </ul>
-
-        <h4 style='color: #34495e;'>Behavior:</h4>
-        <ul>
-            {' '.join(f'<li>{behavior}</li>' for behavior in species_info['behavior'])}
-        </ul>
-
-        <h4 style='color: #34495e;'>Habitat:</h4>
-        <p>{species_info['habitat']}</p>
-
-        <h4 style='color: #34495e;'>Diet:</h4>
-        <p>{species_info['diet']}</p>
-
-        <h4 style='color: #34495e;'>Conservation:</h4>
-        <ul style='list-style-type: none; padding-left: 20px;'>
-            <li>Status: {species_info['conservation']['status']}</li>
-            <li>Population Trend: {species_info['conservation']['population_trend']}</li>
-            <li>Threats:
-                <ul>
-                    {' '.join(f'<li>{threat}</li>' for threat in species_info['conservation']['threats'])}
-                </ul>
-            </li>
-        </ul>
-
-        <h4 style='color: #34495e;'>Interesting Facts:</h4>
-        <ul>
-            {' '.join(f'<li>{fact}</li>' for fact in species_info['interesting_facts'])}
-        </ul>
-    </div>
-    """
-    return html
-
-def predict_whale_species(image) -> Tuple[str, Optional[str], str]:
-    """Predict species and return classification, example image, and detailed description"""
+# Function to predict whale species
+def predict_whale_species(image):
     # Resize the image to match the model's input shape
     img = tf.image.resize(image, (224, 224))
     
@@ -160,48 +72,71 @@ def predict_whale_species(image) -> Tuple[str, Optional[str], str]:
     # Make prediction
     answer = model.predict(img)
     y_class = np.argmax(answer)
-    confidence = float(np.max(answer)) * 100
-    
     predicted_label = labels[y_class]
     image_path = image_paths.get(predicted_label, None)
     
-    # Get detailed species description
-    species_info = get_species_description(predicted_label)
-    formatted_description = format_description(species_info)
+    # Generate structured species information using Gemini API
+    prompt = f"Please Summarize the scientific classification, behavior, and conservation status of the {predicted_label} in bullet points."
     
-    # Add confidence score to the prediction
-    prediction_text = f"{predicted_label} (Confidence: {confidence:.1f}%)"
+    try:
+        response = model_genai.generate_content(prompt)
+        species_info = response.text
+        return f"## Predicted Species: {predicted_label}\n\n{species_info}", image_path
+    except Exception as e:
+        return f"Predicted Species: {predicted_label}\n\nError generating species information: {str(e)}", image_path
+
+# Gradio interface description
+description = """Upload a picture of the dorsal fin of a whale or dolphin to classify its species."""
+
+with gr.Blocks() as iface:
+    gr.Markdown("# Whale & Dolphin Species Classifier")
+    gr.Markdown(description)
     
-    return prediction_text, image_path, formatted_description
+    with gr.Row():
+        # First row: Input and Examples
+        with gr.Column(scale=1):
+            input_image = gr.Image(
+                label="Input Image",
+                type="pil",  # Ensures consistent image handling
+                height=360,  # Set height of input image component
+                width=500   # Set width of input image component
+            )
+            output_text = gr.Textbox(label="Species Classification", visible=False)
+            output_image = gr.Image(label="Analyzed Image", visible=False)
 
-# Create the Gradio interface
-description = """
-<div style='text-align: center;'>
-    <h2>🐋 Whale & Dolphin Species Classifier 🐬</h2>
-    <p>Upload a picture of a whale or dolphin to classify its species and get detailed information.</p>
-    <p>Example images:</p>
-    <ul style='list-style-type: none;'>
-        <li><a href="https://images.fineartamerica.com/images-medium-large-5/killer-whale-fin-william-ervinscience-photo-library.jpg" target="_blank">Killer Whale</a></li>
-        <li><a href="https://www.seakayakadventures.com/sites/seakayakadventures.com/files/images/Beluga-whale-watching.jpg" target="_blank">Beluga Whale</a></li>
-        <li><a href="https://bilderreich.de/images/fotos/2016/07/ob/20160703_7237/humpback-whale-dorsal-fin.jpg" target="_blank">Humpback Whale</a></li>
-        <li><a href="https://www.researchgate.net/profile/David-Weller-4/publication/305681137/figure/fig2/AS:667697595576326@1536202920527/Dorsal-fin-of-a-coastal-bottlenose-dolphin-off-San-Diego-County-The-numerous-nicks-and.png" target="_blank">Bottlenose Dolphin</a></li>
-    </ul>
-</div>
-"""
+        with gr.Column(scale=1):
+            examples = gr.Examples(
+                examples=[
+                    ['examples/1.jpg'],
+                    ['examples/2.jpg'],
+                    ['examples/3.jpg'],
+                    ['examples/4.jpg'],
+                    ['examples/5.jpg']
+                ],
+                inputs=input_image,
+                outputs=[output_text, output_image],
+                fn=predict_whale_species,
+                cache_examples=True
+            )
+    
+    # Submit button between input and output rows
+    submit_btn = gr.Button("Submit", size="lg")
+    
+    with gr.Row():
+        # Output row
+        with gr.Column(scale=1):
+            output_text_main = gr.Markdown(label="Species Classification")
+        with gr.Column(scale=1):
+            output_image_main = gr.Image(
+                label="Analyzed Image",
+                height=300,  # Set height of output image component
+                width=400   # Set width of output image component
+            )
+    
+    submit_btn.click(
+        fn=predict_whale_species,
+        inputs=input_image,
+        outputs=[output_text_main, output_image_main]
+    )
 
-iface = gr.Interface(
-    fn=predict_whale_species,
-    inputs=gr.Image(type="numpy"),
-    outputs=[
-        gr.Text(label="Predicted Species"),
-        gr.Image(label="Example Image"),
-        gr.HTML(label="Species Information")
-    ],
-    title="Whale & Dolphin Species Classifier",
-    description=description,
-    theme=gr.themes.Soft(),
-    css=".gradio-container {max-width: 900px; margin: auto;}"
-)
-
-if __name__ == "__main__":
-    iface.launch(share=True)
+iface.launch(share=True)
