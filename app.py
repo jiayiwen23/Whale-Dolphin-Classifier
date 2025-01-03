@@ -1,6 +1,12 @@
 import os
 from dotenv import load_dotenv
 import google.generativeai as genai
+import numpy as np
+import tensorflow as tf
+from keras.models import load_model
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from tensorflow.keras.applications.efficientnet import preprocess_input
+import gradio as gr
 
 # Load environment variables
 load_dotenv()
@@ -10,17 +16,10 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 genai.configure(api_key=GEMINI_API_KEY)
 model_genai = genai.GenerativeModel("gemini-1.5-flash")
 
-import numpy as np
-import tensorflow as tf
-from keras.models import load_model
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from tensorflow.keras.applications.efficientnet import preprocess_input
-import gradio as gr
-
-# Load the whale & dolphin classifier model
+# Load pre-trained Whale & Dolphin Classifier model
 model = load_model('./whale_classifier.h5', compile=False)
 
-# Define the labels
+# Define the labels for classification output
 labels = {
     0: 'Beluga Whale',
     1: 'Blue Whale',
@@ -47,7 +46,7 @@ labels = {
     22: 'White Sided Dolphin'
 }
 
-# Dictionary containing paths to images for each species
+# Define image paths for each species
 image_paths = {
     'Beluga Whale': 'img/beluga_whale.jpg',
     'Humpback Whale': 'img/humpback_whale.jpg',
@@ -85,6 +84,7 @@ def predict_whale_species(image):
     except Exception as e:
         return f"Predicted Species: {predicted_label}\n\nError generating species information: {str(e)}", image_path
 
+# === Define Gradio Interface ===
 # Gradio interface description
 description = """Upload a picture of the dorsal fin of a whale or dolphin to classify its species."""
 
